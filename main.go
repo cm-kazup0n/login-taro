@@ -69,6 +69,7 @@ func main() {
 			name, err := FindNameTag(instance.Tags)
 			if err != nil {
 				logger.Warn("Name of instance not found.", zap.String("instace_id", *instance.InstanceId))
+				name = *instance.InstanceId
 			}
 			host := Host{
 				Name:           name,
