@@ -66,11 +66,13 @@ func main() {
 
 	for _, reservation := range output.Reservations {
 		for _, instance := range reservation.Instances {
+			logger.Debug(*instance.InstanceId)
 			name, err := FindNameTag(instance.Tags)
 			if err != nil {
 				logger.Warn("Name of instance not found.", zap.String("instace_id", *instance.InstanceId))
-				name = *instance.InstanceId
+				continue
 			}
+
 			host := Host{
 				Name:           name,
 				KeyName:        *instance.KeyName,
