@@ -28,12 +28,25 @@ func FindNameTag(tags []*ec2.Tag) (string, error) {
 	return "", errors.New("No Name tag found.")
 }
 
-func SSHCommand(host Host, bastions map[string]Host) (string, bool) {
+func SSHCommand(host Host, bastions map[string]Host, sockOpt string) (string, bool) {
 	bastion, ok := bastions[host.KeyName]
+	if sockOpt != "" {
+		fmt.Sprintf("-o ProxyCommand=\\'nc -x %s %%h %%p\\'")
+	}
 	if host == bastion {
-		return fmt.Sprintf("%s | ssh -i ~/.ssh/%s.pem ec2-user@%s", host.Name, host.KeyName, bastion.PublicDnsName), true
+		//bastions
+		if sockOpt != "" {
+			return fmt.Sprintf("%s | ssh -o ProxyCommand='nc -x %s %%%%h %%%%p ' -i ~/.ssh/%s.pem ec2-user@%s", host.Name, sockOpt, host.KeyName, bastion.PublicDnsName), true
+		} else {
+			return fmt.Sprintf("%s | ssh -i ~/.ssh/%s.pem ec2-user@%s", host.Name, host.KeyName, bastion.PublicDnsName), true
+		}
 	} else if ok {
-		return fmt.Sprintf("%s | ssh -o ProxyCommand='ssh -i ~/.ssh/%s.pem -W %%h:%%p ec2-user@%s' -i ~/.ssh/%s.pem ec2-user@%s", host.Name, host.KeyName, bastion.PublicDnsName, host.KeyName, host.PrivateDnsName), true
+		//instances in private subnet
+		if sockOpt != "" {
+			return fmt.Sprintf("%s | ssh -o ProxyCommand='ssh -i ~/.ssh/%s.pem -W %%h:%%p -o ProxyCommand=\\'nc -x %s %%%%h %%%%p\\' ec2-user@%s' -i ~/.ssh/%s.pem ec2-user@%s", host.Name, host.KeyName, sockOpt, bastion.PublicDnsName, host.KeyName, host.PrivateDnsName), true
+		} else {
+			return fmt.Sprintf("%s | ssh -o ProxyCommand='ssh -i ~/.ssh/%s.pem -W %%h:%%p ec2-user@%s' -i ~/.ssh/%s.pem ec2-user@%s", host.Name, host.KeyName, bastion.PublicDnsName, host.KeyName, host.PrivateDnsName), true
+		}
 	} else {
 		return "", false
 	}
@@ -41,6 +54,7 @@ func SSHCommand(host Host, bastions map[string]Host) (string, bool) {
 
 var (
 	regionOpt = flag.String("region", "", "region")
+	sockOpt   = flag.String("sock", "", "sock (e.g. proxy.hoge.com:1080)")
 	logger, _ = zap.NewDevelopment()
 )
 
@@ -57,7 +71,7 @@ func main() {
 	output, err := ec2client.DescribeInstances(&ec2.DescribeInstancesInput{})
 
 	if err != nil {
-		logger.DPanic("Fail get instances", zap.Error(err), zap.String("region", *regionOpt))
+		logger.DPanic("Failed to get instances", zap.Error(err), zap.String("region", *regionOpt))
 	}
 
 	//{keyname -> bastion}
@@ -84,7 +98,7 @@ func main() {
 	}
 
 	for _, host := range hosts {
-		command, ok := SSHCommand(host, bastions)
+		command, ok := SSHCommand(host, bastions, *sockOpt)
 		if ok {
 			fmt.Println(command)
 		}
