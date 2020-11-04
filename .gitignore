@@ -13,6 +13,6 @@
 *.out
 
 vendor/
-idea/
+.idea/
 .env
 .envrc
